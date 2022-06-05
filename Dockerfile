@@ -13,6 +13,10 @@ ARG DEV=false
 # buena practica crear otro usuario en lugar del root por si se compromete la imagen
 
 # se pueden crear condiciones en base a los argumentos
+RUN apk add --update --no-cache postgresql-client && \
+    apk add --update --no-cache --virtual .tmp-build-deps \
+        build-base postgresql-dev musl-dev
+
 
 RUN python -m venv /py && \
     /py/bin/pip install --upgrade pip && \
@@ -21,10 +25,13 @@ RUN python -m venv /py && \
       then /py/bin/pip install -r /tmp/requirements.dev.txt ; \
     fi && \
     rm -rf /tmp  && \
+    apk del .tmp-build-deps && \
     adduser \
         --disabled-password \
         --no-create-home \
         django-user
+
+
 
 ENV PATH="/py/bin:$PATH"
 USER django-user
