@@ -9,7 +9,7 @@ from django.test import SimpleTestCase
 from psycopg2 import OperationalError as Psycopg2Error
 
 
-@patch("core.managment.commands.wait_for_db.Command.check")
+@patch("core.management.commands.wait_for_db.Command.check")
 class CommandTest(SimpleTestCase):
     """Test de los comandos"""
 
@@ -17,13 +17,13 @@ class CommandTest(SimpleTestCase):
         """Prueba la espera hacia la base de datos"""
         patched_check.return_value = True
         call_command('wait_for_db')
-        patched_check.assert_called_once_with(database=['default'])
+        patched_check.assert_called_once_with(databases=['default'])
 
     @patch('time.sleep')
     def test_wait_for_db_delay(self, patch_sleep, patched_check):
         """Prueba que se vuelva a conectar cuando ocurra un error"""
-        patched_check.side_effect = [Psycopg2Error] * 2 \
-                                    + [OperationalError] * 3 + [True]
+        patched_check.side_effect = [Psycopg2Error] * 2 + \
+                                    [OperationalError] * 3 + [True]
         call_command('wait_for_db')
         self.assertEqual(patched_check.call_count, 6)
-        patched_check.assert_called_with(database=['default'])
+        patched_check.assert_called_with(databases=['default'])
