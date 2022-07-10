@@ -6,8 +6,8 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-
-from core.models import Ingredient
+from decimal import Decimal
+from core.models import Ingredient, Recipe
 from recipe.serializers import IngredientSerializer
 
 URL_INGREDIENT = reverse('recipe:ingredient-list')
@@ -87,16 +87,15 @@ class PrivateIngredientAPITests(TestCase):
         res = self.client.patch(url, payload, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         ingredient.refresh_from_db()
-        self.assertEqual(ingredient.name,payload['name'])
-
+        self.assertEqual(ingredient.name, payload['name'])
 
     def test_delete_own_ingredient(self):
         """Prueba borrar ingrediente propio """
-        ingredient = create_ingredient('sal',self.user)
+        ingredient = create_ingredient('sal', self.user)
         url = detail_url(ingredient.id)
         res = self.client.delete(url)
 
-        self.assertTrue(res.status_code,status.HTTP_204_NO_CONTENT)
+        self.assertTrue(res.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Ingredient.objects.filter(id=ingredient.id).exists())
 
     def test_delete_unowned_ingredient(self):
@@ -105,6 +104,45 @@ class PrivateIngredientAPITests(TestCase):
         url = detail_url(ingredient)
         res = self.client.delete(url)
 
-        self.assertEqual(res.status_code,status.HTTP_404_NOT_FOUND)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(Ingredient.objects.filter(id=ingredient.id).exists())
 
+    def test_filter_ingredients_assigned_to_recipe(self):
+        """Prueba filtar los ingredientes asignados a la receta"""
+        ingredient_1 = create_ingredient('sal', self.user)
+        ingredient_2 = create_ingredient('azucar',self.user)
+        recipe = Recipe.objects.create(
+            title='Pastel',
+            time_minutes=5,
+            price=Decimal('10.10'),
+            user=self.user
+        )
+        recipe.ingredientes.add(ingredient_1)
+        res = self.client.get(URL_INGREDIENT,{'assigned_only': 1})
+
+        serializer_1 = IngredientSerializer(ingredient_1)
+        serializer_2 = IngredientSerializer(ingredient_2)
+        self.assertIn(serializer_1.data,res.data)
+        self.assertNotIn(serializer_2.data,res.data)
+
+    def test_filter_ingredients_unique(self):
+        """Prueba filter unique list"""
+        ingredient = create_ingredient('sal', self.user)
+        Ingredient.objects.create(user=self.user,name='Lentejas')
+        recipe_1 = Recipe.objects.create(
+            title='Huevos con salsa',
+            time_minutes=50,
+            price=Decimal('7.00'),
+            user=self.user
+        )
+        recipe_2 = Recipe.objects.create(
+            title='Huevos fritos',
+            time_minutes=20,
+            price=Decimal('4.00'),
+            user=self.user
+        )
+        recipe_1.ingredientes.add(ingredient)
+        recipe_2.ingredientes.add(ingredient)
+
+        res = self.client.get(URL_INGREDIENT,{'assigned_only': 1 })
+        self.assertEqual(len(res.data),1)

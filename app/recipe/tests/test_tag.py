@@ -1,13 +1,15 @@
 """
 Test para las categorias
 """
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from core.models import Tag
+from core.models import Tag, Recipe
 from recipe.serializers import TagSerializer
 
 TAGS_URL = reverse('recipe:tag-list')
@@ -17,8 +19,9 @@ def create_user(email='admin@gmail.com', password='admin.1234'):
     """Crea y regresa el usuario"""
     return get_user_model().objects.create_user(email=email, password=password)
 
-def create_tag(user,name='helados'):
-    return Tag.objects.create(user=user,name=name)
+
+def create_tag(user, name='helados'):
+    return Tag.objects.create(user=user, name=name)
 
 
 def detail_url_tag(id_tag):
@@ -88,14 +91,63 @@ class TestTagPrivateAPI(TestCase):
 
         res = self.client.delete(url)
 
-        self.assertEqual(res.status_code,status.HTTP_204_NO_CONTENT)
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Tag.objects.filter(id=tag.id).exists())
 
     def test_delete_tag_unowned(self):
         """Prueba eliminar la categoria de alguien mas"""
-        new_user  = create_user(email='test@test.com')
+        new_user = create_user(email='test@test.com')
         tag = create_tag(new_user)
         url = detail_url_tag(tag.id)
         res = self.client.delete(url)
-        self.assertEqual(res.status_code,status.HTTP_404_NOT_FOUND)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(Tag.objects.filter(id=tag.id).exists())
+
+    def test_filter_tags_assigned_to_recipe(self):
+        """Test obtener tags asignadas a las recetas"""
+        categoria_1 = create_tag(user=self.user, name='Desayuno')
+        categoria_2 = create_tag(user=self.user, name='Cena')
+
+        recipe = Recipe.objects.create(
+            user=self.user,
+            title='Huevos rancheros',
+            time_minutes=10,
+            price=Decimal('2.50')
+        )
+
+        recipe.tags.add(categoria_1)
+
+        res = self.client.get(TAGS_URL, {'assigned_only': 1})
+
+        serializer_1 = TagSerializer(categoria_1)
+        serializer_2 = TagSerializer(categoria_2)
+
+        self.assertIn(serializer_1.data, res.data)
+        self.assertNotIn(serializer_2.data, res.data)
+
+    def test_filtered_tags_unique(self):
+        """Tests filta las categorias en una unica lista"""
+        tag = create_tag(user=self.user,name='Almuerzo')
+        Tag.objects.create(user=self.user,name='Refaccion')
+
+        recipe_1 = Recipe.objects.create(
+            user=self.user,
+            title='Huevos rancheros',
+            time_minutes=10,
+            price=Decimal('2.50')
+        )
+
+        recipe_2 = Recipe.objects.create(
+            user=self.user,
+            title='Huevos fritos',
+            time_minutes=10,
+            price=Decimal('2.50')
+        )
+
+        recipe_1.tags.add(tag)
+        recipe_2.tags.add(tag)
+
+        res = self.client.get(TAGS_URL,{'assigned_only':1})
+        self.assertEqual(len(res.data), 1)
+
+

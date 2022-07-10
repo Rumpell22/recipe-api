@@ -5,6 +5,7 @@ ENV PYTHONUNBUFFERED 1
 
 COPY ./requirements.txt /tmp/requirements.txt
 COPY ./requirements.dev.txt /tmp/requirements.dev.txt
+COPY ./scripts /scripts
 COPY ./app /app
 WORKDIR /app
 EXPOSE 8000
@@ -13,9 +14,9 @@ ARG DEV=false
 # buena practica crear otro usuario en lugar del root por si se compromete la imagen
 
 # se pueden crear condiciones en base a los argumentos
-RUN apk add --update --no-cache postgresql-client && \
+RUN apk add --update --no-cache postgresql-client jpeg-dev && \
     apk add --update --no-cache --virtual .tmp-build-deps \
-        build-base postgresql-dev musl-dev
+        build-base postgresql-dev musl-dev zlib zlib-dev linux-headers
 
 
 RUN python -m venv /py && \
@@ -29,9 +30,14 @@ RUN python -m venv /py && \
     adduser \
         --disabled-password \
         --no-create-home \
-        django-user
+        django-user && \
+    mkdir -p /vol/web/media && \
+    mkdir -p /vol/web/static && \
+    chown -R django-user:django-user /vol && \
+    chmod -R 755 /vol && \
+    chmod -R +x /scripts
 
 
-
-ENV PATH="/py/bin:$PATH"
+ENV PATH="/scripts:/py/bin:$PATH"
 USER django-user
+CMD ["run.sh"]
